@@ -1,306 +1,184 @@
 ### 物流详情页
 ---
-今天就来简单的实现一下, 只有两个`Activity`, 晒单、图片显示`Activity`
+当在开发有订单模块`App`时基本上都会用到物流详情页
 
 
+大概看了下各大电商`App`的物流详情页, 其实大同小异都差不多是一种
 
-配置如下
-
-![build.gradle](https://github.com/hexianqiao3755/OrderCommentPage/blob/master/gif/2112446-d0ca6a63443aac4c.png)
-
-布局没有太大难度, 大家照着依葫芦画瓢就写出来了, 就不做介绍了
-由于代码过多就不全部展示了, 只讲解重要的逻辑处理
-**废话不多说, 先看效果图**
-
-效果图可能加载有点慢 耐心等待
-
-![example.gif](https://github.com/hexianqiao3755/OrderCommentPage/blob/master/gif/GIF_20170418_153324.gif)
+可能也只是部分细节的不同
 
 
-#### 1.MainActivity
-点击相机后执行`MultiImageSelector.create().count(MAX_PIC - imageUrls.size()).start(this, REQUEST_CODE_PICTURE);`
-调出选择图片界面, 选择完成会进入`onActivityResult`方法
-我们就在该方法中处理选中的晒单图集合
-回调的`onActivityResult`后核心的处理在`handleCommentPicList`方法里
+**先看效果图**
+
+![example_1](https://github.com/hexianqiao3755/LogisticsDisplayExample/blob/master/art/example_1.jpeg)
+![example_2](https://github.com/hexianqiao3755/LogisticsDisplayExample/blob/master/art/example_2.jpeg)
+
+
+#### Gradle配置
 ```
-    public static final String KEY_IMAGE_LIST = "imageList";
-    public static final String KEY_CURRENT_INDEX = "currentIndex";
-    private final int REQUEST_CODE_PICTURE = 1;
-    private final int RESULT_CODE_LARGE_IMAGE = 1;
-    //晒单图片最多选择四张
-    private final int MAX_PIC = 4;
+repositories { 
+    maven { url "https://jitpack.io" }
+} 
+dependencies {
+    compile 'com.github.CymChad:BaseRecyclerViewAdapterHelper:2.9.40'
+}
+```
+`BaseRecyclerViewAdapterHelper`是一个封装了`RecyclerView`自带的`Adapter`的第三方库
+
+---
+
+使用前先解决`ScrollView`嵌套`RecyclerView`的冲突
+之前写过一篇文章有说道这个问题
+
+[冲突解决文章](https://www.jianshu.com/p/98f2fcfb0e22)
+```
+rv_logistics.setLayoutManager(new LinearLayoutManager(this));
+//解决ScrollView嵌套RecyclerView出现的系列问题
+rv_logistics.setNestedScrollingEnabled(false);
+rv_logistics.setHasFixedSize(true);
+```
+
+#### XML使用
+
+![draw_example](https://github.com/hexianqiao3755/LogisticsDisplayExample/blob/master/art/draw_example.jpeg)
+
+```
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:paddingLeft="12dp">
+
+    <LinearLayout
+        android:layout_width="18dp"
+        android:layout_height="match_parent"
+        android:gravity="center_horizontal"
+        android:orientation="vertical">
+
+        <View
+            android:id="@+id/v_short_line"
+            android:layout_width="1dp"
+            android:layout_height="15dp"
+            android:background="#E6E6E6" />
+
+        <ImageView
+            android:id="@+id/iv_new"
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:scaleType="fitXY"
+            android:src="@mipmap/icon_logistics_new" />
+
+        <ImageView
+            android:id="@+id/iv_old"
+            android:layout_width="11dp"
+            android:layout_height="11dp"
+            android:scaleType="fitXY"
+            android:src="@drawable/shape_gray_circle"
+            android:visibility="gone" />
+
+        <View
+            android:id="@+id/v_long_line"
+            android:layout_width="1dp"
+            android:layout_height="wrap_content"
+            android:background="#E6E6E6" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginLeft="16dp"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:paddingTop="11dp">
+
+        <TextView
+            android:id="@+id/tv_info"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="#18C289"
+            android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/tv_date"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="15dp"
+            android:layout_marginTop="12dp"
+            android:textColor="#18C289"
+            android:textSize="12sp" />
+
+        <View
+            android:id="@+id/v_bottom_line"
+            android:layout_width="match_parent"
+            android:layout_height="1px"
+            android:background="#E6E6E6" />
+    </LinearLayout>
+</LinearLayout>
+```
+
+#### JAVA使用(适配器代码)
+其实核心的使用方法就是控制控件的**隐藏**和**显示**
+
+根据不同的条件来控制
+```
+public class LogisticsInfoAdapter extends BaseQuickAdapter<LogisticsInfoBean, BaseViewHolder> {
+    private Context context;
+    private List<LogisticsInfoBean> data;
+
+    public LogisticsInfoAdapter(Context context, int layoutResId, @Nullable List<LogisticsInfoBean> data) {
+        super(layoutResId, data);
+        this.context = context;
+        this.data = data;
+    }
 
     @Override
-    protected void onActivityResult(int requestCode, int resultCode, final Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (resultCode == RESULT_OK) {
-            if (requestCode == REQUEST_CODE_PICTURE) {
-                // 获取返回的图片列表
-                List<String> path = data.getStringArrayListExtra(MultiImageSelectorActivity.EXTRA_RESULT);
-                imageUrls.addAll(path);
-                handleCommentPicList(imageUrls, false);
-            }
-        } else if (resultCode == RESULT_CODE_LARGE_IMAGE) {
-            //晒单大图页返回, 重新设置晒单图片
-            handleCommentPicList(imageUrls = data.getStringArrayListExtra(KEY_IMAGE_LIST), true);
-        }
-    }
-```
-
-`handleCommentPicList`方法作用是
-- 把返回的几张压缩后保存在一个零时文件夹, 并在用户退出时清空该文件夹
-传到服务器时也是上传压缩后的图
- 现在的手机拍出的图基本都是`5MB`左右, 不可能就把这么大的图片完全显示上去
-**ps: 我最开始没这样压缩时, 把4张5M左右的图不做处理直接显示,  app直接卡着动不了, 内存秒升到300M+**
-
-- 把压缩后的图显示到控件上`sdv_pic.setImageURI(Uri.parse("file://" + path));`
-
-- 设置`onClickListener`跳转到图片详情`Activity`
-
-```
-    /**
-     * 处理选择的评价图片
-     *
-     * @param paths      图片的路径集合
-     * @param isFromBack 是否来自LargeImageActivity返回
-     */
-    private void handleCommentPicList(final List<String> paths, boolean isFromBack) {
-        LinearLayout rootview = new LinearLayout(context);
-        View commentView;
-        SimpleDraweeView sdv_pic;
-        for (int i = 0, len = paths.size(); i < len; i++) {
-            commentView = getLayoutInflater().inflate(R.layout.order_comment_pic_item, null);
-            sdv_pic = (SimpleDraweeView) commentView.findViewById(R.id.sdv_pic);
-            if (isFromBack) {
-                //来自LargeImageActivity
-                sdv_pic.setImageURI(Uri.parse("file://" + paths.get(i)));
-            } else {
-                //来自图片选择器
-                String path = FileUtils.getCachePath(context);//获取app缓存路径来存放临时图片
-                BitmapUtils.compressImage(paths.get(i), path, 95);
-                sdv_pic.setImageURI(Uri.parse("file://" + path));
-                imageUrls.set(i, path);
-            }
-
-            final int finalI = i;
-            sdv_pic.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    //点击HorizontalScrollView里的晒单图进入图片详情页
-                    Intent intent = new Intent(context, CommentLargeImageActivity.class);
-                    intent.putExtra(KEY_CURRENT_INDEX, finalI);
-                    intent.putStringArrayListExtra(KEY_IMAGE_LIST, (ArrayList<String>) paths);
-                    startActivityForResult(intent, REQUEST_CODE_PICTURE);
-                }
-            });
-            AutoUtils.auto(commentView);
-            rootview.addView(commentView);
-        }
-        hsv_comment_imgs.removeAllViews();
-        hsv_comment_imgs.addView(rootview);
-    }
-```
-
-用户退出时需要清除临时压缩图片文件
-```
-    @Override
-    public void onBackPressed() {
-        super.onBackPressed();
-        //清除临时压缩图片文件
-        CleanCacheManager.cleanExternalCache(this);
-    }
-```
-
-```
-public class CleanCacheManager {
-
-    /**
-     * 清除外部cache下的内容(/mnt/sdcard/android/data/com.xxx.xxx/cache)
-     *
-     * @param context
-     */
-    public static void cleanExternalCache(Context context) {
-        if (Environment.getExternalStorageState().equals(
-                Environment.MEDIA_MOUNTED)) {
-            deleteFilesByDirectory(context.getExternalCacheDir());
-        }
-    }
-
-
-    /**
-     * 删除方法 这里只会删除某个文件夹下的文件，如果传入的directory是个文件，将不做处理
-     *
-     * @param directory
-     */
-    private static void deleteFilesByDirectory(File directory) {
-        if (directory != null && directory.exists() && directory.isDirectory()) {
-            for (File item : directory.listFiles()) {
-                item.delete();
-            }
-        }
+    protected void convert(BaseViewHolder helper, LogisticsInfoBean item) {
+        //获取物流信息和物流时间的字体颜色, 最新的一条物流数据字体为绿色
+        int newInfoColor = context.getResources().getColor(helper.getLayoutPosition() == 0 ? R.color.green : R.color.gray);
+        //当前item的索引==0 && 物流数据的数量大于1条   ->  显示绿色大圆圈
+        helper.setGone(R.id.iv_new, helper.getLayoutPosition() == 0 && data.size() > 1)
+                //当前item的索引!=0 && 物流数据的数量大于1条   ->  显示灰色小圆圈
+                .setGone(R.id.iv_old, helper.getLayoutPosition() != 0 && data.size() > 1)
+                //当前item的索引 != 0    ->  显示圆点上面短一点的灰线
+                .setVisible(R.id.v_short_line, helper.getLayoutPosition() != 0)
+                //当前item的索引 != 物流数据的最后一条    ->  显示圆点下面长一点的灰线
+                .setGone(R.id.v_long_line, helper.getLayoutPosition() != data.size() - 1)
+                //当前item的索引 != 物流数据的最后一条    ->  显示物流时间下面的横向的灰线
+                .setGone(R.id.v_bottom_line, helper.getLayoutPosition() != data.size() - 1)
+                .setTextColor(R.id.tv_info, newInfoColor)
+                .setTextColor(R.id.tv_date, newInfoColor)
+                //物流信息
+                .setText(R.id.tv_info, item.getAcceptStation())
+                //物流时间
+                .setText(R.id.tv_date, item.getAcceptTime());
     }
 }
 ```
 
-#### 2.CommentLargeImageActivity
-获取点击图片的索引, 作用显示于当前索引图片
-获取传来的图片集合, 并设置到`ViewPager`的适配器
-
+#### Kotlin使用(适配器代码)
 ```
-        Bundle bundle = getIntent().getExtras();
-        if (bundle != null) {
-            currentIndex = bundle.getInt(MainActivity.KEY_CURRENT_INDEX);
-            imgUrls = bundle.getStringArrayList(MainActivity.KEY_IMAGE_LIST);
-            vp_large_image.setAdapter(adapter = new LargeImageAdapter(this, imgUrls));//设置晒单图显示
-            vp_large_image.setOffscreenPageLimit(imgUrls.size());//预加载的数量为图片集合的长度
-            vp_large_image.setCurrentItem(currentIndex);
-            tv_current_index.setText(++currentIndex + " / " + imgUrls.size());
-            currentIndex--;
-        }
-```
-
-点击图片详情页右上角的删除时. 会删除当前的图片
-```
-case R.id.ll_remove:
-	//删除当前晒单图
-	if (imgUrls.size() == 1) {
-		//删除最后一张时直接回到晒单评论页
-		imgUrls.clear();
-		onBackPressed();//图片删除完后退出当前页面
-	} else {
-		//删除指定索引的图片
-		removeImage(currentIndex);
-	}
-	break;
-```
-
-点击左上角的返回或者物理键盘的返回
-**就把处理后的图片集合返回到`MainActivity`**
-```
-    @Override
-    public void onBackPressed() {
-        Intent intent = new Intent();
-        intent.putStringArrayListExtra(MainActivity.KEY_IMAGE_LIST, (ArrayList<String>) adapter.getData());
-        //此处返回到MainActivity的onActivityResult回调方法的resultCode == RESULT_CODE_LARGE_IMAGE判断
-        setResult(RESULT_CODE_LARGE_IMAGE, intent);
-        super.onBackPressed();
-    }
-```
-
-```
-    /**
-     * 删除指定索引的晒单图
-     * @param index
-     */
-    private void removeImage(int index) {
-        imgUrls.remove(index);
-        setImageTitle(index);
-        vp_large_image.removeAllViews();//删除viewpager所有的子View
-        vp_large_image.setAdapter(adapter = new LargeImageAdapter(this, imgUrls));//重新设置适配器数据显示
-        vp_large_image.setCurrentItem(index == imgUrls.size() - 1 ? ++index : --index);//显示指定位置
-        adapter.notifyDataSetChanged();
-    }
-```
-
-**删除图片后, 标题需要的操作**
-```
-    /**
-     * 设置标题显示
-     * <p>比如3 / 4
-     * @param index
-     */
-    private void setImageTitle(int index) {
-        //删除图片路径后
-        if (index == 0 || imgUrls.size() == 1) {
-            // 索引 == 0 || 图片集合只剩一张图
-            // 就把索引值固定为1
-            index = 1;
-        } else if (index == imgUrls.size() - 1) {
-            // 当前索引 == 图片集合的最后一张
-            // 就不做任何处理
-        } else {
-            //否则就把索引+1便于显示
-            index += 1;
-        }
-        tv_current_index.setText(index + " / " + imgUrls.size());
-    }
-```
-
-#### 3.LargeImageAdapter
-适配器的代码由于使用到图片缩放框架, 所以大部分代码都是固定写法
-```
-public class LargeImageAdapter extends PagerAdapter {
-    private Context context;
-    private List<String> imgUrls;
-
-    public LargeImageAdapter(Context context, List<String> imgUrls) {
-        this.context = context;
-        this.imgUrls = imgUrls;
-    }
-
-    public List<String> getData() {
-        return this.imgUrls;
-    }
-
-    public void setData(List<String> imgUrls) {
-        this.imgUrls = imgUrls;
-        notifyDataSetChanged();
-    }
-
-    @Override
-    public int getCount() {
-        return imgUrls.size();
-    }
-
-    @Override
-    public boolean isViewFromObject(View view, Object object) {
-        return view == object;
-    }
-
-    @Override
-    public void destroyItem(ViewGroup container, int position, Object object) {
-        ViewPager viewPager = (ViewPager) container;
-        View view = (View) object;
-        viewPager.removeView(view);
-    }
-
-    @Override
-    public int getItemPosition(Object object) {
-        return POSITION_NONE;
-    }
-
-    @Override
-    public Object instantiateItem(ViewGroup viewGroup, int position) {
-        LayoutInflater inflater = (LayoutInflater) context.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
-        final PhotoDraweeView photoDraweeView = (PhotoDraweeView) inflater.inflate(R.layout.include_large_image, null).findViewById(R.id.sdv_larget_image);
-        PipelineDraweeControllerBuilder controller = Fresco.newDraweeControllerBuilder();
-        controller.setUri(Uri.parse("file://" + imgUrls.get(position)));//设置图片显示
-        controller.setOldController(photoDraweeView.getController());
-        controller.setControllerListener(new BaseControllerListener<ImageInfo>() {
-            @Override
-            public void onFinalImageSet(String id, ImageInfo imageInfo, Animatable animatable) {
-                super.onFinalImageSet(id, imageInfo, animatable);
-                if (imageInfo == null) {
-                    return;
-                }
-                photoDraweeView.update(imageInfo.getWidth(), imageInfo.getHeight());
-            }
-        });
-        photoDraweeView.setOnViewTapListener(new OnViewTapListener() {
-            @Override
-            public void onViewTap(View view, float x, float y) {
-                //单击退出
-                ((BaseActivity) context).finish();
-            }
-        });
-        photoDraweeView.setController(controller.build());
-        try {
-            viewGroup.addView(photoDraweeView, ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return photoDraweeView;
+class LogisticsInfoAdapter(var context: BaseActivity?, var data: ArrayList<LogisticsInfoBean>?)
+    : BaseQuickAdapter<LogisticsInfoBean, BaseViewHolder>(R.layout.item_logistics, data) {
+    override fun convert(helper: BaseViewHolder?, item: LogisticsInfoBean?) {
+        //获取物流信息和物流时间的字体颜色, 最新的一条物流数据字体为绿色
+        val textColor = context?.getColorFromBase(if (helper?.layoutPosition == 0) R.color.green_18C289 else R.color.text_btn_gray)
+        //当前item的索引==0 && 物流数据的数量大于1条   ->  显示绿色大圆圈
+        helper?.setGone(R.id.iv_new, helper.layoutPosition == 0 && data?.size!! > 1)
+                //当前item的索引!=0 && 物流数据的数量大于1条   ->  显示灰色小圆圈
+                ?.setGone(R.id.iv_old, helper.layoutPosition != 0 && data?.size!! > 1)
+                //当前item的索引 != 0    ->  显示圆点上面短一点的灰线
+                ?.setVisible(R.id.v_short_line, helper.layoutPosition != 0)
+                //当前item的索引 != 物流数据的最后一条    ->  显示圆点下面长一点的灰线
+                ?.setGone(R.id.v_long_line, helper.layoutPosition != data?.size!! - 1)
+                //当前item的索引 != 物流数据的最后一条    ->  显示物流时间下面的横向的灰线
+                ?.setGone(R.id.v_bottom_line, helper.layoutPosition != data?.size!! - 1)
+                ?.setTextColor(R.id.tv_info, textColor!!)
+                ?.setTextColor(R.id.tv_date, textColor!!)
+                //物流信息
+                ?.setText(R.id.tv_info, item?.acceptStation)
+                //物流时间
+                ?.setText(R.id.tv_date, item?.acceptTime)
     }
 }
 ```
