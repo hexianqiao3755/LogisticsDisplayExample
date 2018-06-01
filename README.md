@@ -40,7 +40,7 @@ rv_logistics.setHasFixedSize(true);
 
 #### XML使用
 
-![draw_example](https://github.com/hexianqiao3755/LogisticsDisplayExample/blob/master/art/draw_example.jpeg)
+![draw_example](https://github.com/hexianqiao3755/LogisticsDisplayExample/blob/master/art/draw_example.png)
 
 ```
 <?xml version="1.0" encoding="utf-8"?>
