@@ -10,8 +10,7 @@
 
 **先看效果图**
 
-![example_1](https://github.com/hexianqiao3755/LogisticsDisplayExample/blob/master/art/example_1.jpeg)
-![example_2](https://github.com/hexianqiao3755/LogisticsDisplayExample/blob/master/art/example_2.jpeg)
+![example](https://github.com/hexianqiao3755/LogisticsDisplayExample/blob/master/art/example.png)
 
 
 #### Gradle配置

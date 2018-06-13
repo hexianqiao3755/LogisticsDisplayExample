@@ -17,6 +17,7 @@ public class MainActivity extends Activity {
 
         RecyclerView rv_logistics = findViewById(R.id.rv_logistics);
         rv_logistics.setLayoutManager(new LinearLayoutManager(this));
+        rv_logistics.setFocusable(false);
         //解决ScrollView嵌套RecyclerView出现的系列问题
         rv_logistics.setNestedScrollingEnabled(false);
         rv_logistics.setHasFixedSize(true);
